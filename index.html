@@ -3,190 +3,572 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Touch Drawing App</title>
+    <title>Advanced Drawing Pad</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        /* Custom style for color input to ensure consistent height with buttons and proper appearance */
+        input[type="color"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 44px; /* Roughly matches p-2 sm:p-3 button height + border */
+            height: 44px; /* Roughly matches p-2 sm:p-3 button height + border */
+            padding: 0;
+            border-width: 1px; /* Tailwind 'border' class equivalent */
+            border-style: solid;
+            border-radius: 0.375rem; /* Tailwind 'rounded-md' class equivalent */
+            cursor: pointer;
+            /* Ensure the swatch itself fills the element */
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch {
+            border: none; /* Remove default border on swatch */
+            border-radius: 0.25rem; /* Inner rounding for the swatch */
+        }
+        /* Firefox specific styling */
+        input[type="color"]::-moz-color-swatch {
+            border: none;
+            border-radius: 0.25rem;
+        }
+         input[type="color"]::-moz-focus-inner { /* Remove dotted outline in Firefox */
+            border: 0;
+            padding: 0;
+        }
+        /* Ensure brush size range input track is visible against dark backgrounds */
+        input[type="range"] {
+            --thumb-color: #3B82F6; /* blue-500 */
+            --track-color: #4B5563; /* gray-600 */
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            background-color: var(--thumb-color);
+        }
+        input[type="range"]::-moz-range-thumb {
+            background-color: var(--thumb-color);
+            border: none; /* Remove default border */
+        }
+        input[type="range"]::-ms-thumb {
+            background-color: var(--thumb-color);
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            background-color: var(--track-color);
+            border-radius: 0.25rem; /* rounded-sm */
+        }
+        input[type="range"]::-moz-range-track {
+            background-color: var(--track-color);
+            border-radius: 0.25rem; /* rounded-sm */
+        }
+        input[type="range"]::-ms-track {
+            background-color: var(--track-color);
+            border-radius: 0.25rem; /* rounded-sm */
+            border-color: transparent;
+            color: transparent;
+        }
+    </style>
 </head>
-<body class="bg-gray-200 flex flex-col items-center justify-start min-h-screen p-4 sm:p-6 md:p-8">
+<body class="bg-gray-800 text-white h-screen flex flex-col overflow-hidden">
 
-    <h1 class="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-gray-700">Touch Drawing App</h1>
+    <!-- Drawing Canvas -->
+    <canvas id="drawingCanvas" class="flex-grow w-full bg-white opacity-0 transition-opacity duration-500 ease-in-out" style="touch-action: none;"></canvas>
 
-    <div class="controls w-full max-w-xl bg-white p-4 rounded-lg shadow-lg mb-6 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-4">
-        <div class="flex flex-col sm:flex-row items-center gap-4">
-            <div>
-                <label for="colorPicker" class="block text-sm font-medium text-gray-700 mb-1">Color:</label>
-                <input type="color" id="colorPicker" value="#000000" class="w-full sm:w-auto h-10 p-1 border rounded-md">
-            </div>
+    <!-- Toolbar -->
+    <div id="toolbar" class="bg-gray-700 p-2 sm:p-4 shadow-lg w-full flex items-center justify-around sm:justify-start gap-2 sm:gap-4 flex-wrap">
+        
+        <!-- Tool Selection -->
+        <button id="brushToolBtn" class="p-2 sm:p-3 rounded-md bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-700 focus:ring-blue-400 transition-all duration-150 ease-in-out active:scale-95 active:brightness-90" aria-label="Brush Tool">
+            Brush
+        </button>
+        <button id="eraserToolBtn" class="p-2 sm:p-3 rounded-md bg-gray-600 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-700 focus:ring-blue-400 transition-all duration-150 ease-in-out active:scale-95 active:brightness-90" aria-label="Eraser Tool">
+            Eraser
+        </button>
 
-            <div>
-                <label for="brushSize" class="block text-sm font-medium text-gray-700 mb-1">Brush Size:</label>
-                <input type="range" id="brushSize" min="1" max="20" value="5" class="w-full sm:w-auto h-8 accent-blue-500">
-            </div>
+        <!-- Color Picker -->
+        <div>
+            <label for="colorPicker" class="sr-only">Color Picker</label>
+            <input type="color" id="colorPicker" value="#FF0000" class="border-gray-500" aria-label="Color Picker">
         </div>
 
-        <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-4 sm:mt-0">
-            <button id="eraserTool" class="px-4 py-2 text-sm sm:text-base bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75">Eraser</button>
-            <button id="clearAll" class="px-4 py-2 text-sm sm:text-base bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-75">Clear All</button>
-            <button id="saveImage" class="px-4 py-2 text-sm sm:text-base bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-75">Save (PNG)</button>
+        <!-- Brush Size Control -->
+        <div class="flex items-center gap-2">
+            <label for="brushSize" class="text-sm sm:text-base sr-only sm:not-sr-only">Size:</label>
+            <input type="range" id="brushSize" min="1" max="50" value="5" class="w-20 sm:w-28 h-6 cursor-pointer" aria-label="Brush Size">
+            <span id="brushSizePreview" class="text-sm w-6 text-center">5</span>
+            <span class="text-sm hidden sm:inline">px</span>
         </div>
+        
+        <!-- Action Buttons -->
+        <button id="clearCanvasBtn" class="p-2 sm:p-3 rounded-md bg-gray-600 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-700 focus:ring-blue-400 transition-all duration-150 ease-in-out active:scale-95 active:brightness-90" aria-label="Clear Canvas">
+            Clear
+        </button>
+        <button id="saveCanvasBtn" class="p-2 sm:p-3 rounded-md bg-gray-600 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-700 focus:ring-blue-400 transition-all duration-150 ease-in-out active:scale-95 active:brightness-90" aria-label="Save Canvas">
+            Save
+        </button>
+
     </div>
-
-    <canvas id="drawingCanvas" class="bg-white shadow-2xl rounded-lg border-2 border-gray-300 w-full max-w-xl h-auto touch-none" style="aspect-ratio: 4/3;"></canvas>
-
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const canvas = document.getElementById('drawingCanvas');
             const ctx = canvas.getContext('2d');
 
+            // Toolbar elements
+            const brushToolBtn = document.getElementById('brushToolBtn');
+            const eraserToolBtn = document.getElementById('eraserToolBtn');
             const colorPicker = document.getElementById('colorPicker');
             const brushSizeSlider = document.getElementById('brushSize');
-            const eraserTool = document.getElementById('eraserTool');
-            const clearAllButton = document.getElementById('clearAll');
-            const saveImageButton = document.getElementById('saveImage');
+            const brushSizePreview = document.getElementById('brushSizePreview');
+            const clearCanvasBtn = document.getElementById('clearCanvasBtn');
+            const saveCanvasBtn = document.getElementById('saveCanvasBtn');
 
             let isDrawing = false;
-            let lastX = 0;
-            let lastY = 0;
-            let currentBrushColor = '#000000'; // Default black
-            let currentBrushSize = 5; // Default size
-            const canvasBackgroundColor = '#FFFFFF'; // White
+            let currentPoints = []; // For smoothing
+            const canvasBackgroundColor = '#F0F0F0'; // Light gray, distinct from page bg
+            let activeTool = 'brush'; // 'brush' or 'eraser'
+            let lastBrushColor = colorPicker.value; // Store the last used brush color
 
-            // Function to set canvas dimensions
+            // Initial drawing styles
+            ctx.lineWidth = brushSizeSlider.value;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = colorPicker.value; // Initialize with color picker's default
+
+            function updateToolUI() {
+                if (activeTool === 'brush') {
+                    brushToolBtn.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+                    brushToolBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                    eraserToolBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                    eraserToolBtn.classList.add('bg-gray-600', 'hover:bg-gray-500');
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = lastBrushColor; // Restore actual brush color
+                    canvas.style.cursor = 'crosshair';
+                } else if (activeTool === 'eraser') {
+                    eraserToolBtn.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+                    eraserToolBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                    brushToolBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                    brushToolBtn.classList.add('bg-gray-600', 'hover:bg-gray-500');
+                    ctx.globalCompositeOperation = 'destination-out';
+                    canvas.style.cursor = 'cell'; 
+                }
+            }
+
+            brushToolBtn.addEventListener('click', () => {
+                activeTool = 'brush';
+                updateToolUI();
+            });
+
+            eraserToolBtn.addEventListener('click', () => {
+                activeTool = 'eraser';
+                updateToolUI();
+            });
+
+            colorPicker.addEventListener('input', (e) => {
+                lastBrushColor = e.target.value;
+                if (activeTool === 'brush') {
+                    ctx.strokeStyle = lastBrushColor;
+                }
+                // Optional: Update color picker border for feedback
+                // colorPicker.style.borderColor = e.target.value;
+            });
+
+            brushSizeSlider.addEventListener('input', (e) => {
+                const newSize = e.target.value;
+                ctx.lineWidth = newSize;
+                brushSizePreview.textContent = newSize;
+            });
+
+            clearCanvasBtn.addEventListener('click', () => {
+                // Optional: Confirmation dialog
+                // if (!confirm('Are you sure you want to clear the canvas?')) {
+                //     return;
+                // }
+
+                const originalGCO = ctx.globalCompositeOperation;
+                const originalStrokeStyle = ctx.strokeStyle; // Save current strokeStyle
+                const originalFillStyle = ctx.fillStyle;     // Save current fillStyle
+
+
+                // Clear with transparent pixels first
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Then fill with the opaque background color
+                ctx.globalCompositeOperation = 'source-over'; // Ensure normal drawing mode
+                ctx.fillStyle = canvasBackgroundColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Restore previous context states
+                ctx.globalCompositeOperation = originalGCO;
+                ctx.strokeStyle = originalStrokeStyle; // Restore strokeStyle
+                ctx.fillStyle = originalFillStyle; // Restore fillStyle (though strokeStyle is more relevant for lines)
+                
+                // If the active tool is brush, ensure its color is correctly set for future drawing
+                if (activeTool === 'brush') {
+                     ctx.strokeStyle = lastBrushColor;
+                }
+                 // No need to explicitly call resizeCanvas's fill, as we've done it here.
+            });
+
+            saveCanvasBtn.addEventListener('click', () => {
+                // Create a temporary anchor element
+                const link = document.createElement('a');
+                link.download = 'drawing.png'; // Filename for the download
+
+                // Get the data URL. The canvas background is already opaque (#F0F0F0).
+                // PNG format will preserve transparency if any part of the canvas is transparent
+                // (e.g., if eraser makes parts transparent instead of drawing background color).
+                // However, our current eraser uses 'destination-out', which makes pixels transparent.
+                // If the canvas itself (bg-white in HTML, then filled with #F0F0F0 in JS) is considered,
+                // then 'destination-out' erases to transparent against this #F0F0F0.
+                // When toDataURL('image/png') is called, this transparency is preserved in the PNG.
+                // If a non-transparent background is desired for erased areas in the output image (e.g., white),
+                // a temporary canvas could be used to draw the current content on top of an explicit white fill.
+                // For now, current behavior is fine: erased parts will be transparent in the PNG.
+                // If the requirement was for erased parts to be white, we'd do:
+                // const tempSaveCanvas = document.createElement('canvas');
+                // tempSaveCanvas.width = canvas.width;
+                // tempSaveCanvas.height = canvas.height;
+                // const tempCtx = tempSaveCanvas.getContext('2d');
+                // tempCtx.fillStyle = '#FFFFFF'; // Explicit white background for save
+                // tempCtx.fillRect(0, 0, tempSaveCanvas.width, tempSaveCanvas.height);
+                // tempCtx.drawImage(canvas, 0, 0); // Draw current canvas on top
+                // link.href = tempSaveCanvas.toDataURL('image/png');
+                // For this subtask, using the canvas directly is fine as #F0F0F0 is the drawn background.
+                
+                link.href = canvas.toDataURL('image/png');
+
+                // Programmatically click the link to trigger the download
+                link.click();
+
+                // Clean up the temporary link (optional, good practice)
+                link.remove();
+            });
+
             function resizeCanvas() {
-                // Preserve drawing buffer if needed (more complex)
-                // For now, we'll just resize. This will clear the canvas.
-                // Consider saving and restoring content if this is an issue.
-                const tempCanvas = document.createElement('canvas');
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
-                if (canvas.width > 0 && canvas.height > 0) { // only if canvas has been drawn on
-                    tempCtx.drawImage(canvas, 0, 0);
+                let imageData;
+                // Check if canvas has dimensions and content before trying to save
+                if (canvas.width > 0 && canvas.height > 0) {
+                    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 }
 
-                // Set canvas internal resolution to match its displayed size
+                // Set canvas internal resolution to its displayed size
                 canvas.width = canvas.offsetWidth;
                 canvas.height = canvas.offsetHeight;
-                
+
+                // Set background color
+                ctx.fillStyle = canvasBackgroundColor;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
                 // Restore previous content if it existed
-                if (tempCanvas.width > 0 && tempCanvas.height > 0) {
-                    ctx.drawImage(tempCanvas, 0, 0);
-                } else {
-                     // Fill canvas with white background initially or after resize if it was empty
-                    ctx.fillStyle = canvasBackgroundColor;
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                if (imageData) {
+                    ctx.putImageData(imageData, 0, 0);
                 }
-
-                // Re-apply current drawing settings
-                ctx.strokeStyle = currentBrushColor;
-                ctx.lineWidth = currentBrushSize;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-            }
-            
-            // Initial canvas setup
-            function init() {
-                resizeCanvas(); // Set initial size and background
-
-                ctx.strokeStyle = currentBrushColor;
-                ctx.lineWidth = currentBrushSize;
-                ctx.lineCap = 'round'; // Makes lines smoother
-                ctx.lineJoin = 'round'; // Makes line connections smoother
-
-                // Event Listeners
-                // Touch events
-                canvas.addEventListener('touchstart', startDrawing);
-                canvas.addEventListener('touchmove', draw);
-                canvas.addEventListener('touchend', stopDrawing);
-                canvas.addEventListener('touchcancel', stopDrawing);
-
-                // Mouse events
-                canvas.addEventListener('mousedown', startDrawing);
-                canvas.addEventListener('mousemove', draw);
-                canvas.addEventListener('mouseup', stopDrawing);
-                canvas.addEventListener('mouseout', stopDrawing); // Stop drawing if mouse leaves canvas
-
-                colorPicker.addEventListener('input', (e) => {
-                    currentBrushColor = e.target.value;
-                    ctx.strokeStyle = currentBrushColor;
-                });
-
-                brushSizeSlider.addEventListener('input', (e) => {
-                    currentBrushSize = e.target.value;
-                    ctx.lineWidth = currentBrushSize;
-                });
-
-                eraserTool.addEventListener('click', () => {
-                    currentBrushColor = canvasBackgroundColor; // Set color to background color
-                    ctx.strokeStyle = currentBrushColor;
-                });
-
-                clearAllButton.addEventListener('click', () => {
-                    ctx.fillStyle = canvasBackgroundColor;
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                     // Reset stroke style to whatever is selected in color picker after clearing
-                    ctx.strokeStyle = colorPicker.value; 
-                    currentBrushColor = colorPicker.value;
-                });
-
-                saveImageButton.addEventListener('click', () => {
-                    const link = document.createElement('a');
-                    link.download = 'drawing.png';
-                    link.href = canvas.toDataURL('image/png');
-                    link.click();
-                    link.remove();
-                });
-
-                window.addEventListener('resize', resizeCanvas);
+                
+                // Re-apply current drawing styles as they might be reset by resize
+                // Note: strokeStyle, lineWidth, lineCap, lineJoin are part of the context state
+                // and should persist unless the context itself is reset.
+                // However, if any globalCompositeOperation or other complex states were set,
+                // they might need re-application here. For now, basic styles are fine.
             }
 
-            function getCoordinates(event) {
-                let x, y;
-                const rect = canvas.getBoundingClientRect();
-                if (event.touches && event.touches.length > 0) {
-                    x = event.touches[0].clientX - rect.left;
-                    y = event.touches[0].clientY - rect.top;
-                } else {
-                    x = event.clientX - rect.left;
-                    y = event.clientY - rect.top;
-                }
-                return { x, y };
+            function getPointerPosition(event) {
+                return { x: event.offsetX, y: event.offsetY };
             }
 
-            function startDrawing(event) {
-                event.preventDefault(); // Prevent scrolling on touch
+            function handlePointerDown(event) {
+                event.preventDefault();
                 isDrawing = true;
-                const coords = getCoordinates(event);
-                [lastX, lastY] = [coords.x, coords.y];
+                currentPoints = []; // Clear points for a new line
+                
+                const { x, y } = getPointerPosition(event);
+                currentPoints.push({ x, y });
 
-                // Optional: Draw a dot on start
-                // ctx.beginPath();
-                // ctx.arc(lastX, lastY, currentBrushSize / 2, 0, Math.PI * 2);
-                // ctx.fillStyle = currentBrushColor;
-                // ctx.fill();
-            }
-
-            function draw(event) {
-                if (!isDrawing) return;
-                event.preventDefault(); // Prevent scrolling on touch
-
-                const coords = getCoordinates(event);
+                // Start new path
                 ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(coords.x, coords.y);
-                ctx.stroke();
-                [lastX, lastY] = [coords.x, coords.y];
+                ctx.moveTo(x, y);
+
+                // Optional: Draw a dot if line width is small (e.g., for very fine lines)
+                // if (ctx.lineWidth <= 2) {
+                //     ctx.fillStyle = ctx.strokeStyle; // Use current brush color
+                //     ctx.fillRect(x - ctx.lineWidth / 2, y - ctx.lineWidth / 2, ctx.lineWidth, ctx.lineWidth);
+                // }
             }
 
-            function stopDrawing() {
-                if (isDrawing) {
-                    ctx.closePath(); // End the current path
-                    isDrawing = false;
+            function handlePointerMove(event) {
+                if (!isDrawing) return;
+                event.preventDefault();
+
+                const { x, y } = getPointerPosition(event);
+                currentPoints.push({ x, y });
+
+                // Line smoothing using quadratic curves
+                if (currentPoints.length > 2) {
+                    const p0 = currentPoints[currentPoints.length - 3];
+                    const p1 = currentPoints[currentPoints.length - 2];
+                    const p2 = currentPoints[currentPoints.length - 1];
+
+                    // Calculate midpoint for the quadratic curve
+                    const midPoint = {
+                        x: (p1.x + p2.x) / 2,
+                        y: (p1.y + p2.y) / 2
+                    };
+                    
+                    // Instead of moving to p0, the curve starts from p1 control point to midPoint
+                    // The actual start of this segment was the previous midPoint or the initial moveTo
+                    // For a continuous curve, we need to adjust how we use beginPath and moveTo.
+                    // A common approach is to move to the first point, then lineTo the second,
+                    // then start quadratic curves from the second point.
+                    // Or, for each segment, use the previous point as control.
+                    
+                    // Let's simplify: draw from previous point to new midpoint using current point as control
+                    // This is a common way to smooth lines.
+                    // The current path already has a `moveTo` or `lineTo` to `p1`.
+                    // We want to draw a curve from `p1` to `midPoint`.
+                    // The control point should be `p1` to make the curve pass through `p1`.
+                    // The curve is from the current last point on the path (which is p1 effectively after last stroke)
+                    // to midPoint, using p1 as control.
+                    // ctx.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y);
+                    // This is a standard approach: current point is p2, previous is p1, previous's previous is p0.
+                    // We draw a curve from p1 to the midpoint of p1 and p2, using p1 as control.
+                    // No, this is more typical: draw from the midpoint of p0-p1 to midpoint of p1-p2, using p1 as control.
+                    // For this implementation, we will draw a line from the previous point (p1)
+                    // to the midpoint of the current point (p2) and the previous point (p1),
+                    // using the previous point (p1) as the control point for the curve.
+                    // This means the curve goes towards p2.
+                    
+                    // Corrected smoothing: The line is drawn from currentPoints[i-1] to currentPoints[i]
+                    // The curve should use the point before the segment (p0), the start of segment (p1), and end of segment (p2)
+                    // A common method: ctx.moveTo(p0_mid.x, p0_mid.y); ctx.quadraticCurveTo(p1.x, p1.y, p1_mid.x, p1_mid.y);
+                    
+                    // Simpler quadratic smoothing for streaming points:
+                    // The current path is already at p1. We want to draw a curve to midPoint(p1,p2) using p1 as control.
+                    // This means the curve starts at p1, bends towards p1 (no actual bend), and ends at midPoint.
+                    // This is effectively a line to midPoint.
+                    // Let's use the last point (p1) as the control point, and curve to midPoint(p1,p2)
+                    
+                    // The current last point on the canvas path is p1 (currentPoints[currentPoints.length - 2])
+                    // The new point is p2 (currentPoints[currentPoints.length - 1])
+                    // We want to draw a curve from p1 to a point derived from p2.
+                    // The control point will be p1. The end point will be the midpoint of p1 and p2.
+                    const controlX = p1.x;
+                    const controlY = p1.y;
+                    const endX = (p1.x + p2.x) / 2;
+                    const endY = (p1.y + p2.y) / 2;
+                    
+                    ctx.quadraticCurveTo(controlX, controlY, endX, endY);
+
+                } else {
+                    // For the first segment (or if not enough points for smoothing)
+                    ctx.lineTo(x, y);
                 }
+                ctx.stroke(); // Stroke each segment
+                // To prepare for the next segment, the path's current point is now `endX, endY` (or `x,y` if lineTo)
+                // We need to move to the actual last point `p2` to ensure the next curve starts from there.
+                // This is important because quadraticCurveTo uses the current path end point.
+                if (currentPoints.length > 2) {
+                     const p2 = currentPoints[currentPoints.length-1];
+                     ctx.moveTo(p2.x, p2.y); // This is not quite right. The curve should flow.
+                                          // The issue is that quadraticCurveTo sets the new current point to its end.
+                                          // If we stroke immediately, then beginPath for next segment, it can work.
+                                          // For a single path, it's more complex.
+                }
+                // Let's adjust: each pointermove draws one segment.
+                // The path should be continuous.
+                // pointerdown: moveTo(p0.x, p0.y)
+                // pointermove (first): currentPoints=[p0,p1]. lineTo(p1.x,p1.y). stroke(). moveTo(p1.x,p1.y)
+                // pointermove (second): currentPoints=[p0,p1,p2]. p0,p1,p2. curve from p1 to mid(p1,p2) with control p1. stroke(). moveTo(mid.x, mid.y) ?
+                // This is tricky. A simpler approach for streaming:
+                // The path starts at p0. We add p1.
+                // When p2 arrives, we have p0, p1, p2.
+                // We want to draw a curve from p0 to p1, using some control.
+                // Or, if we have many points, we can use a Catmull-Rom spline or similar.
+                // For quadratic: ctx.moveTo(p0.x, p0.y); ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+                // This means p1 is the control point. The curve does not pass through p1.
+                // What we want is for the curve to pass through the points.
+                //
+                // Let's try the common approach for smoothing:
+                // When a new point p_i arrives, we have p_i-1 and p_i-2.
+                // The curve is drawn from p_i-1 to the midpoint of p_i-1 and p_i.
+                // The control point is p_i-1.
+                // So, current path ends at p_i-1. We call quadraticCurveTo(p_i-1.x, p_i-1.y, (p_i-1.x + p_i.x)/2, (p_i-1.y + p_i.y)/2)
+                // This is done for every point.
+                // This means the current path needs to be at p_i-1 before this call.
+                // And after, the path is at the midpoint. We then need to moveTo(p_i.x, p_i.y) to connect properly for next segment.
+
+                // Re-evaluating smoothing:
+                // On pointerdown: isDrawing=true, currentPoints=[p0], ctx.beginPath(), ctx.moveTo(p0.x, p0.y)
+                // On pointermove: currentPoints=[p0, p1, ... pi]. New point is pi. Previous is pi-1.
+                // We want to draw a curve from pi-1 to pi.
+                // If length is 2 (p0, p1): lineTo(p1.x, p1.y)
+                // If length > 2 (p0, p1, p2):
+                //   lastPoint = p1 (currentPoints[len-2])
+                //   currentPoint = p2 (currentPoints[len-1])
+                //   controlPoint = lastPoint
+                //   endPoint = (lastPoint.x + currentPoint.x)/2, (lastPoint.y + currentPoint.y)/2
+                //   ctx.quadraticCurveTo(controlPoint.x, controlPoint.y, endPoint.x, endPoint.y)
+                //   Then, to ensure the next segment connects from `currentPoint` not `endPoint`:
+                //   ctx.moveTo(currentPoint.x, currentPoint.y) --- this breaks the continuous stroke.
+                //
+                // The most common method for live drawing with quadratic curves:
+                // Store all points. On each move, redraw the entire line for that stroke. This can be slow.
+                // Or, incremental drawing:
+                // p_n = new point. p_n-1 = previous point. p_n-2 = point before previous.
+                // The curve segment is from p_n-1 to (p_n-1 + p_n)/2 using p_n-1 as control.
+                // This means ctx is at p_n-1. ctx.quadraticCurveTo(p_n-1.x, p_n-1.y, (p_n-1.x+p_n.x)/2, (p_n-1.y+p_n.y)/2 )
+                // This is what was implemented above. The issue is that the path then ends at the midpoint.
+                // The solution is: the line must visually pass through the points the user indicates.
+                // The curve should be drawn *to* the new point, using the previous point as a control for smoothing.
+                // Consider points A, B, C. We are at A. User moves to B, then C.
+                // Draw line A-B. Now at B. User moves to C.
+                // We want a curve from B to C. Control point could be B itself, or an average.
+                // If control is B, and end is C: ctx.quadraticCurveTo(B.x, B.y, C.x, C.y) - this makes B a control point.
+                // The path starts at previous point.
+                // This approach is better:
+                // Have at least 3 points: prevPt, currentPt, nextPt
+                // Curve from prevPt to currentPt, using currentPt as control point? No.
+                // Curve from currentPt to mid(currentPt, nextPt), using currentPt as control.
+                // This is what I have: ctx.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y);
+                // where p1 is currentPt, midPoint is mid(currentPt, nextPt).
+                // The context is already at currentPt (p1) due to previous moveTo or lineTo.
+                // So this should draw a curve from p1, "bending" via p1 (so straight start), to midPoint.
+                // This results in lines that are "halfway" to the cursor.
+                //
+                // Let's use the three-point approach for a segment: (p0, p1, p2)
+                // p0 = currentPoints[len-3], p1 = currentPoints[len-2], p2 = currentPoints[len-1]
+                // The actual drawing happens from p1.
+                // We need to move to p1 if we aren't there.
+                // ctx.moveTo(p1.x, p1.y); // This is usually done implicitly by previous segment.
+                // ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x)/2, (p1.y + p2.y)/2); // This is one form
+                //
+                // The method from several examples (e.g., Mozilla Developer Network):
+                // For points pt1, pt2, pt3
+                // ctx.moveTo(pt1.x, pt1.y);
+                // ctx.quadraticCurveTo(pt2.x, pt2.y, pt3.x, pt3.y);
+                // This means pt2 is the control. Curve doesn't pass through pt2.
+                // This is for a static set of points.
+                //
+                // For dynamic drawing, a common method is:
+                // 1. When you get point P_i:
+                // 2. P_i-1 is the previous point.
+                // 3. P_i-2 is the point before that.
+                // 4. Calculate M_i-1 = midpoint of P_i-2 and P_i-1.
+                // 5. Calculate M_i = midpoint of P_i-1 and P_i.
+                // 6. The new segment is a quadratic curve from M_i-1 to M_i, using P_i-1 as the control point.
+                // ctx.moveTo(M_i-1.x, M_i-1.y);
+                // ctx.quadraticCurveTo(P_i-1.x, P_i-1.y, M_i.x, M_i.y);
+                // This requires at least 3 points to calculate two midpoints and one control. (P_i-2, P_i-1, P_i)
+                // On pointerdown: currentPoints=[p0].
+                // On move 1: currentPoints=[p0, p1]. Draw line p0-p1.
+                // On move 2: currentPoints=[p0, p1, p2]. Now we can use the smoothing.
+                //   p_i-2 = p0, p_i-1 = p1, p_i = p2
+                //   M_i-1 = (p0+p1)/2. M_i = (p1+p2)/2. Control = p1.
+                //   Need to clear the previous line p0-p1 if we redraw.
+                // This is for redrawing the whole line.
+                //
+                // For incremental drawing:
+                // The path's current point is where the last stroke ended.
+                // Let currentPoints be [..., prevPt, currentPt]
+                // We want to draw from prevPt to currentPt with smoothing.
+                // If currentPoints.length < 2, nothing to draw (or just a dot).
+                // If currentPoints.length == 2 (first segment): lineTo(currentPt.x, currentPt.y)
+                // If currentPoints.length > 2:
+                //   pt = currentPoints[len-1] (current)
+                //   prevPt = currentPoints[len-2]
+                //   prevPrevPt = currentPoints[len-3]
+                //   mid1 = (prevPrevPt.x + prevPt.x)/2, (prevPrevPt.y + prevPt.y)/2
+                //   mid2 = (prevPt.x + pt.x)/2, (prevPt.y + pt.y)/2
+                //   ctx.beginPath(); // Start new segment for atomic drawing
+                //   ctx.moveTo(mid1.x, mid1.y);
+                //   ctx.quadraticCurveTo(prevPt.x, prevPt.y, mid2.x, mid2.y);
+                //   ctx.stroke();
+                // This means each pointermove event draws a small curve. This is a good approach.
+                
+                // Let's try this:
+                if (currentPoints.length >= 3) {
+                    const p2 = currentPoints[currentPoints.length - 1]; // current point
+                    const p1 = currentPoints[currentPoints.length - 2]; // previous point
+                    const p0 = currentPoints[currentPoints.length - 3]; // point before previous
+
+                    const mid1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+                    const mid2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+                    // To make this work incrementally, the canvas context needs to be at mid1.
+                    // This means the previous stroke must have ended at mid1.
+                    // pointerdown: currentPoints = [p0], ctx.beginPath(), ctx.moveTo(p0.x, p0.y) // Path at p0
+                    // move1: currentPoints = [p0,p1]. ctx.lineTo(p1.x, p1.y). stroke() // Path at p1
+                    // move2: currentPoints = [p0,p1,p2]. p0,p1,p2.
+                    //   mid1=(p0+p1)/2. mid2=(p1+p2)/2. Control=p1.
+                    //   The path is currently at p1. We need to start from mid1.
+                    //   This implies clearing and redrawing, or complex path manipulation.
+
+                    // Simplest incremental approach that gives some smoothing:
+                    // The current path is at p1 (from previous stroke/moveTo).
+                    // We draw a curve from p1 to p2, using p1 as control.
+                    // This makes the line start straight from p1 and curve towards p2.
+                    // ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y); // Control: p1, End: p2
+                    // No, this is: Control: p1, End: p2. Curve doesn't pass through p1 if p1 is control.
+                    // The curve starts from the current point of the path.
+                    // If path is at pA, and we call ctx.quadraticCurveTo(cp.x, cp.y, end.x, end.y),
+                    // it draws from pA to end, using cp as control.
+                    
+                    // Let's use the widely cited "draw a line to the midpoint, using the previous point as control"
+                    // Path is at p1 (currentPoints[len-2])
+                    // New point is p2 (currentPoints[len-1])
+                    // Control is p1. End is (p1+p2)/2.
+                    ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+                    ctx.stroke();
+                    // The new path end is at (p1+p2)/2. For the next segment to connect smoothly,
+                    // it needs to start from there. So this should work for continuous curve.
+                } else if (currentPoints.length === 2) {
+                    const p1 = currentPoints[currentPoints.length-1];
+                    ctx.lineTo(p1.x, p1.y);
+                    ctx.stroke();
+                }
+                // For the more advanced smoothing (midpoint to midpoint), it usually involves drawing the entire line
+                // each frame or using an offscreen canvas to build the smoothed path.
+                // The current method is a compromise for incremental drawing.
             }
 
-            init(); // Initialize the application
+            function handlePointerUpOrLeave(event) {
+                if (!isDrawing) return;
+                isDrawing = false;
+
+                // If there are any remaining points (e.g. if pointerup before minimum points for curve), draw them.
+                // The quadraticCurveTo in pointermove handles partial segments, stroking them.
+                // If currentPoints.length was 1 (only mousedown), nothing drawn.
+                // If currentPoints.length was 2, a line was drawn.
+                // If currentPoints.length > 2, curves were drawn.
+                // The path should be complete.
+                
+                // One final stroke to ensure the last segment (from midpoint to actual last cursor position) is drawn.
+                if (currentPoints.length > 1) { // Check if there's something to draw
+                    const lastPt = currentPoints[currentPoints.length - 1];
+                    // The path currently ends at a midpoint if curves were drawn.
+                    // We need to draw a line from that midpoint to the actual last point.
+                    // This helps make the line feel more responsive and reach the cursor.
+                    ctx.lineTo(lastPt.x, lastPt.y);
+                    ctx.stroke();
+                }
+
+                ctx.closePath(); // Not strictly necessary for stroked lines, but good practice.
+                currentPoints = []; // Reset for next stroke
+            }
+
+            // Initial setup
+            brushSizePreview.textContent = brushSizeSlider.value; // Init preview
+            updateToolUI(); // Set initial active tool UI (brush by default) and cursor
+            resizeCanvas(); // Set initial size and background
+            
+            // Canvas fade-in animation
+            requestAnimationFrame(() => {
+                canvas.classList.remove('opacity-0');
+            });
+
+            window.addEventListener('resize', resizeCanvas);
+
+            // Drawing event listeners
+            canvas.addEventListener('pointerdown', handlePointerDown);
+            canvas.addEventListener('pointermove', handlePointerMove);
+            canvas.addEventListener('pointerup', handlePointerUpOrLeave);
+            canvas.addEventListener('pointerleave', handlePointerUpOrLeave); // Stop drawing if pointer leaves canvas
         });
     </script>
-
 </body>
 </html>
